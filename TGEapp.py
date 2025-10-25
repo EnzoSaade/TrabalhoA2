@@ -3,6 +3,7 @@ import requests
 import pandas as pd
 import locale
 from datetime import datetime
+import altair as alt # Importação necessária para o gráfico customizado
 
 # --- Configuração e Formatação ---
 
@@ -194,7 +195,7 @@ def comparar_deputados_ui():
         st.info("Ambos os deputados tiveram o mesmo total de despesas no período.")
 
     
-    # --- GRÁFICO SIMPLES DE BARRAS ---
+    # --- GRÁFICO PERSONALIZADO COM ALTAIR (Novo) ---
     st.markdown("### Comparação Visual de Gastos")
     
     # Cria um DataFrame simples para o gráfico
@@ -203,8 +204,30 @@ def comparar_deputados_ui():
         'Despesas': [total1, total2]
     })
     
-    # Cria o gráfico de barras
-    st.bar_chart(df_grafico.set_index('Deputado'), height=350)
+    # Define o esquema de cores personalizado para as barras
+    # Usando cores baseadas no nome para consistência
+    cores_deputados = alt.Scale(
+        domain=[deputado_selecionado1['nome'], deputado_selecionado2['nome']],
+        range=['#1f77b4', '#ff7f0e'] # Azul e Laranja, cores distintas
+    )
+    
+    # Cria o gráfico Altair
+    chart = alt.Chart(df_grafico).mark_bar(
+        size=40, # Define a espessura das colunas (mais finas)
+    ).encode(
+        # Eixo X com o nome do deputado (nominal)
+        x=alt.X('Deputado', axis=None), 
+        # Eixo Y com as despesas (quantitativo), formatado para BRL
+        y=alt.Y('Despesas', title='Valor (R$)', axis=alt.Axis(format='$,.2f', labelExpr="datum.value / 1000 + 'K'")),
+        # Codifica as cores
+        color=alt.Color('Deputado', scale=cores_deputados, legend=None),
+        # Adiciona tooltip para exibir o valor exato
+        tooltip=['Deputado', alt.Tooltip('Despesas', format='$.2f', title='Total R$')]
+    ).properties(
+        title=f"Gastos de Cota Parlamentar ({ano})"
+    ).interactive() # Permite zoom e pan
+
+    st.altair_chart(chart, use_container_width=True)
     
     st.markdown("---")
 
