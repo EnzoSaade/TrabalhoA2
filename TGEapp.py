@@ -194,7 +194,7 @@ def comparar_deputados_ui():
         st.info("Ambos os deputados tiveram o mesmo total de despesas no período.")
 
     
-    # --- GRÁFICO SIMPLES DE BARRAS (Novo) ---
+    # --- GRÁFICO SIMPLES DE BARRAS ---
     st.markdown("### Comparação Visual de Gastos")
     
     # Cria um DataFrame simples para o gráfico
@@ -246,6 +246,3 @@ if __name__ == "__main__":
         initial_sidebar_state="collapsed"
     )
     comparar_deputados_ui()
-```eof
-
-Este código está pronto para ser salvo como `app.py` no seu repositório do GitHub e implantado no Streamlit Cloud.
