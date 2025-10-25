@@ -78,7 +78,6 @@ def comparar_deputados_ui():
     
     st.title("⚖️ Comparação de Despesas entre Deputados Federais")
     
-    # FRASE ALTERADA AQUI
     st.markdown("POR UMA ATIVIDADE PARLAMENTAR MAIS TRANSPARENTE E REPUBLICANA! 🇧🇷")
     
     # --- 1. Seleção de Deputados ---
@@ -172,7 +171,7 @@ def comparar_deputados_ui():
         st.metric("Total de Despesas", formatar_moeda(total2))
         st.caption(f"Registros: {len(df2)}")
 
-    st.markdown("### Análise")
+    st.markdown("### Análise Textual")
     diferenca = abs(total1 - total2)
     
     if total1 > total2:
@@ -193,6 +192,21 @@ def comparar_deputados_ui():
         st.error(f"📉 {msg}")
     else:
         st.info("Ambos os deputados tiveram o mesmo total de despesas no período.")
+
+    
+    # --- NOVO GRÁFICO SIMPLES DE BARRAS ---
+    st.markdown("### Comparação Visual de Gastos")
+    
+    # Cria um DataFrame simples para o gráfico
+    df_grafico = pd.DataFrame({
+        'Deputado': [deputado_selecionado1['nome'], deputado_selecionado2['nome']],
+        'Despesas': [total1, total2]
+    })
+    
+    # Cria o gráfico de barras
+    st.bar_chart(df_grafico.set_index('Deputado'), height=350)
+    
+    st.markdown("---")
 
     # --- 5. Detalhamento em Tabela ---
     st.markdown("### Detalhamento das Despesas (Registros)")
