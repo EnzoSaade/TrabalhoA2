@@ -61,7 +61,6 @@ def obter_despesas_deputado(id_deputado, ano, mes=None, limite=1000):
     except requests.exceptions.RequestException:
         return None
 
-# NOVO: Função para buscar proposições (Projetos de Lei, etc.)
 @st.cache_data(ttl=3600)
 def obter_proposicoes_deputado(id_deputado, ano):
     """Busca o número de proposições (Projetos de Lei, etc.) do deputado em um ano específico."""
@@ -83,7 +82,6 @@ def obter_proposicoes_deputado(id_deputado, ano):
         st.warning(f"⚠️ Aviso: Não foi possível carregar as Proposições para o ano {ano}. Tente outro ano. (Erro: {e})")
         return None
 
-# NOVO: Função para obter detalhes (inclui status, presença e contato)
 @st.cache_data(ttl=3600)
 def obter_detalhes_deputado(id_deputado):
     """Busca detalhes do deputado, incluindo status e informações de gabinete."""
@@ -171,8 +169,8 @@ def comparar_deputados_ui():
     
     col_c_ano, col_c_mes = st.columns(2)
     
-    # Seleciona o ano anterior como padrão
-    ano_default_index = 1 if ano_atual > anos_disponiveis[-1] else 0
+    # Seleciona o ano anterior como padrão (índice 1)
+    ano_default_index = 1 if len(anos_disponiveis) > 1 else 0
     ano = col_c_ano.selectbox("Ano (Recomendado: Ano anterior)", options=anos_disponiveis, key="comp_ano", index=ano_default_index)
     
     meses_comp = {
@@ -243,14 +241,25 @@ def comparar_deputados_ui():
         if proposicoes1:
             st.caption(f"Exibindo 3 exemplos:")
             for prop in proposicoes1[:3]:
-                st.markdown(f"* {prop.get('siglaTipo', '')} {prop.get('numero', '')}/{prop.get('ano', '')}: [{prop.get('ementa', 'Sem Ementa')}]({prop.get('uri', '')})")
+                # Usando .get() para evitar erros se a chave não existir
+                sigla = prop.get('siglaTipo', '')
+                numero = prop.get('numero', '')
+                prop_ano = prop.get('ano', '')
+                ementa = prop.get('ementa', 'Sem Ementa')
+                uri = prop.get('uri', '#')
+                st.markdown(f"* {sigla} {numero}/{prop_ano}: [{ementa}]({uri})")
         
     with col_prop2:
         st.metric("Total de Proposições", num_proposicoes2)
         if proposicoes2:
             st.caption(f"Exibindo 3 exemplos:")
             for prop in proposicoes2[:3]:
-                st.markdown(f"* {prop.get('siglaTipo', '')} {prop.get('numero', '')}/{prop.get('ano', '')}: [{prop.get('ementa', 'Sem Ementa')}]({prop.get('uri', '')})")
+                sigla = prop.get('siglaTipo', '')
+                numero = prop.get('numero', '')
+                prop_ano = prop.get('ano', '')
+                ementa = prop.get('ementa', 'Sem Ementa')
+                uri = prop.get('uri', '#')
+                st.markdown(f"* {sigla} {numero}/{prop_ano}: [{ementa}]({uri})")
     
     # Gráfico de Proposições
     st.markdown("### Comparação Visual de Projetos Apresentados")
@@ -288,4 +297,97 @@ def comparar_deputados_ui():
     
     # Total Deputado 1
     with col_res1:
-        st.
+        st.info(f"👤 **{deputado_selecionado1['nome']}** ({deputado_selecionado1['siglaPartido']}/{deputado_selecionado1['siglaUf']})")
+        st.metric("Total de Despesas", formatar_moeda(total1))
+        st.caption(f"Registros: {len(df1)}")
+
+    # Total Deputado 2
+    with col_res2:
+        st.info(f"👤 **{deputado_selecionado2['nome']}** ({deputado_selecionado2['siglaPartido']}/{deputado_selecionado2['siglaUf']})")
+        st.metric("Total de Despesas", formatar_moeda(total2))
+        st.caption(f"Registros: {len(df2)}")
+
+    st.markdown("### Análise Textual de Despesas")
+    diferenca = abs(total1 - total2)
+    
+    if total1 > total2:
+        vencedor = deputado_selecionado1
+        perdedor = deputado_selecionado2
+        percentual = ((total1 - total2) / total2 * 100) if total2 > 0 else "N/A"
+        msg = f"**{vencedor['nome']}** gastou **{formatar_moeda(diferenca)}** a mais que {perdedor['nome']}"
+        if total2 > 0:
+              msg += f" (Representa **{percentual:.1f}%** a mais)."
+        st.success(f"📈 {msg}")
+    elif total2 > total1:
+        vencedor = deputado_selecionado2
+        perdedor = deputado_selecionado1
+        percentual = ((total2 - total1) / total1 * 100) if total1 > 0 else "N/A"
+        msg = f"**{vencedor['nome']}** gastou **{formatar_moeda(diferenca)}** a mais que {perdedor['nome']}"
+        if total1 > 0:
+              msg += f" (Representa **{percentual:.1f}%** a mais)."
+        st.error(f"📉 {msg}")
+    else:
+        st.info("Ambos os deputados tiveram o mesmo total de despesas no período.")
+
+    
+    # Gráfico de Despesas (Original)
+    st.markdown("### Comparação Visual de Gastos")
+    
+    df_grafico = pd.DataFrame({
+        'Deputado': [deputado_selecionado1['nome'], deputado_selecionado2['nome']],
+        'Despesas': [total1, total2]
+    })
+    
+    chart = alt.Chart(df_grafico).mark_bar(
+        size=40,
+    ).encode(
+        x=alt.X('Deputado', axis=None), 
+        y=alt.Y('Despesas', title='Valor (R$)', axis=alt.Axis(format='$,.2f', labelExpr="datum.value / 1000 + 'K'")),
+        color=alt.Color('Deputado', scale=cores_deputados, legend=None),
+        tooltip=['Deputado', alt.Tooltip('Despesas', format='$.2f', title='Total R$')]
+    ).properties(
+        title=f"Gastos de Cota Parlamentar ({ano})"
+    ).interactive()
+
+    st.altair_chart(chart, use_container_width=True)
+    
+    st.markdown("---")
+
+    # --- 5. Detalhamento em Tabela ---
+    st.markdown("### Detalhamento das Despesas (Registros)")
+    
+    col_tab1, col_tab2 = st.columns(2)
+
+    def display_dataframe(df, nome_deputado, col):
+        if df.empty:
+            col.info(f"Nenhuma despesa para {nome_deputado}.")
+            return
+            
+        df_exibicao = df[['dataDocumento', 'tipoDespesa', 'nomeFornecedor', 'valorDocumento']].copy()
+        df_exibicao.rename(columns={
+            'dataDocumento': 'Data', 
+            'tipoDespesa': 'Tipo de Despesa', 
+            'nomeFornecedor': 'Fornecedor', 
+            'valorDocumento': 'Valor (R$)'
+        }, inplace=True)
+        
+        # Formatação final de moeda
+        df_exibicao['Valor (R$)'] = df_exibicao['Valor (R$)'].apply(lambda x: f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+        
+        col.subheader(nome_deputado)
+        col.dataframe(df_exibicao, use_container_width=True)
+
+    with col_tab1:
+        display_dataframe(df1, deputado_selecionado1['nome'], col_tab1)
+
+    with col_tab2:
+        display_dataframe(df2, deputado_selecionado2['nome'], col_tab2)
+
+# --- Execução do App ---
+if __name__ == "__main__":
+    st.set_page_config(
+        page_title="Comparação de Deputados",
+        layout="wide",
+        initial_sidebar_state="collapsed"
+    )
+    comparar_deputados_ui()
