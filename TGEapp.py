@@ -3,7 +3,7 @@ import requests
 import pandas as pd
 import locale
 from datetime import datetime
-import altair as alt
+import altair as alt # Importação necessária para o gráfico customizado
 
 # --- Configuração e Formatação ---
 
@@ -61,28 +61,6 @@ def obter_despesas_deputado(id_deputado, ano, mes=None, limite=1000):
     except requests.exceptions.RequestException:
         return None
 
-@st.cache_data(ttl=3600)
-def obter_proposicoes_deputado(id_deputado, ano):
-    """Busca o número de proposições (Projetos de Lei, etc.) do deputado em um ano específico."""
-    url = "https://dadosabertos.camara.leg.br/api/v2/proposicoes"
-    params = {
-        "idAutor": id_deputado,
-        "ano": ano,
-        "ordem": "ASC",
-        "ordenarPor": "dataApresentacao",
-        "itens": 100 
-    }
-    
-    try:
-        response = requests.get(url, params=params)
-        response.raise_for_status()
-        return response.json().get("dados", [])
-        
-    except requests.exceptions.RequestException as e:
-        # Exibe o erro de forma clara, mas permite que o app continue
-        st.warning(f"⚠️ Aviso: Não foi possível carregar as Proposições para o ano {ano} (Erro: {e}). Tente um ano anterior.")
-        return None
-
 def calcular_total_despesas(despesas):
     """Calcula o total das despesas e retorna o DataFrame processado."""
     if not despesas:
@@ -99,7 +77,7 @@ def calcular_total_despesas(despesas):
 
 def comparar_deputados_ui():
     
-    st.title("⚖️ Comparação de Despesas e Atividade Legislativa (Projetos de Lei)")
+    st.title("⚖️ Comparação de Despesas entre Deputados Federais")
     
     st.markdown("POR UMA ATIVIDADE PARLAMENTAR MAIS TRANSPARENTE E REPUBLICANA! 🇧🇷")
     
@@ -143,55 +121,42 @@ def comparar_deputados_ui():
     if deputado_selecionado1['id'] == deputado_selecionado2['id']:
         st.error("⚠️ Você selecionou o mesmo deputado duas vezes. Selecione dois diferentes.")
         return
-    
+        
     st.markdown("---")
-    
+        
     # --- 2. Seleção do Período ---
     st.subheader("🗓️ Período para Comparação")
     
     ano_padrao = datetime.now().year
-    # Cria a lista de anos disponíveis (ex: [2025, 2024, 2023, ...])
     anos_disponiveis = list(range(ano_padrao, ano_padrao - 5, -1))
     
     col_c_ano, col_c_mes = st.columns(2)
     
-    # CORREÇÃO AQUI: Define o índice padrão para 1 (o ano anterior) para evitar o erro 400
-    ano_default_index = 1 if len(anos_disponiveis) > 1 else 0
-    ano = col_c_ano.selectbox("Ano", options=anos_disponiveis, key="comp_ano", index=ano_default_index)
+    ano = col_c_ano.selectbox("Ano", options=anos_disponiveis, key="comp_ano")
     
     meses_comp = {
         None: "Todo o Ano", 1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril",
         5: "Maio", 6: "Junho", 7: "Julho", 8: "Agosto", 9: "Setembro",
         10: "Outubro", 11: "Novembro", 12: "Dezembro"
     }
-    mes_nome = col_c_mes.selectbox("Mês (Apenas para Despesas)", options=list(meses_comp.values()), key="comp_mes")
+    mes_nome = col_c_mes.selectbox("Mês", options=list(meses_comp.values()), key="comp_mes")
     mes = [k for k, v in meses_comp.items() if v == mes_nome][0]
 
-    st.markdown("---")
-    
     # --- 3. Busca de Dados e Processamento ---
     
-    with st.spinner("⏳ Carregando dados de despesas e proposições..."):
-        # Dados de Despesas
+    with st.spinner("⏳ Carregando despesas..."):
         despesas1_raw = obter_despesas_deputado(deputado_selecionado1['id'], ano=ano, mes=mes)
         despesas2_raw = obter_despesas_deputado(deputado_selecionado2['id'], ano=ano, mes=mes)
-        
-        total1, df1 = calcular_total_despesas(despesas1_raw)
-        total2, df2 = calcular_total_despesas(despesas2_raw)
-
-        # Dados de Proposições
-        proposicoes1 = obter_proposicoes_deputado(deputado_selecionado1['id'], ano=ano)
-        proposicoes2 = obter_proposicoes_deputado(deputado_selecionado2['id'], ano=ano)
-        
-        num_proposicoes1 = len(proposicoes1) if proposicoes1 is not None else 0
-        num_proposicoes2 = len(proposicoes2) if proposicoes2 is not None else 0
     
     if despesas1_raw is None or despesas2_raw is None:
         st.error("❌ Erro ao carregar as despesas. Verifique a conexão com a API.")
         return
-    
-    # --- 4. EXIBIÇÃO DA COMPARAÇÃO DE DESPESAS ---
-    st.markdown("## 💸 Comparação de Despesas (Cota Parlamentar)")
+
+    total1, df1 = calcular_total_despesas(despesas1_raw)
+    total2, df2 = calcular_total_despesas(despesas2_raw)
+
+    # --- 4. Exibição da Comparação (Métricas e Análise Textual) ---
+    st.markdown("## 📊 Resultado")
     
     col_res1, col_res2 = st.columns(2)
     
@@ -207,7 +172,7 @@ def comparar_deputados_ui():
         st.metric("Total de Despesas", formatar_moeda(total2))
         st.caption(f"Registros: {len(df2)}")
 
-    st.markdown("### Análise Textual de Despesas")
+    st.markdown("### Análise Textual")
     diferenca = abs(total1 - total2)
     
     if total1 > total2:
@@ -230,7 +195,7 @@ def comparar_deputados_ui():
         st.info("Ambos os deputados tiveram o mesmo total de despesas no período.")
 
     
-    # --- GRÁFICO PERSONALIZADO COM ALTAIR (Despesas) ---
+    # --- GRÁFICO PERSONALIZADO COM ALTAIR (Novo) ---
     st.markdown("### Comparação Visual de Gastos")
     
     # Cria um DataFrame simples para o gráfico
@@ -240,6 +205,7 @@ def comparar_deputados_ui():
     })
     
     # Define o esquema de cores personalizado para as barras
+    # Usando cores baseadas no nome para consistência
     cores_deputados = alt.Scale(
         domain=[deputado_selecionado1['nome'], deputado_selecionado2['nome']],
         range=['#1f77b4', '#ff7f0e'] # Azul e Laranja, cores distintas
@@ -265,56 +231,7 @@ def comparar_deputados_ui():
     
     st.markdown("---")
 
-    
-    # --- NOVO BLOCO: COMPARAÇÃO DE PROPOSIÇÕES (PROJETOS) ---
-    st.markdown("## 📝 Comparação de Atividade Legislativa (Projetos de Lei, etc.)")
-    st.caption(f"Contagem de proposições apresentadas no ano de **{ano}** (limite de 100 por deputado por busca).")
-
-    col_prop1, col_prop2 = st.columns(2)
-    
-    # Total Proposições Deputado 1
-    with col_prop1:
-        st.metric("Total de Proposições", num_proposicoes1)
-        st.caption(f"Exibindo 5 exemplos de PLs de {deputado_selecionado1['nome']}:")
-        if proposicoes1:
-            for prop in proposicoes1[:5]:
-                st.markdown(f"* {prop.get('siglaTipo', 'PL')} {prop.get('numero', '')}/{prop.get('ano', '')}: [{prop.get('ementa', 'Sem Ementa')}]({prop.get('uri', '')})")
-        
-    # Total Proposições Deputado 2
-    with col_prop2:
-        st.metric("Total de Proposições", num_proposicoes2)
-        st.caption(f"Exibindo 5 exemplos de PLs de {deputado_selecionado2['nome']}:")
-        if proposicoes2:
-            for prop in proposicoes2[:5]:
-                st.markdown(f"* {prop.get('siglaTipo', 'PL')} {prop.get('numero', '')}/{prop.get('ano', '')}: [{prop.get('ementa', 'Sem Ementa')}]({prop.get('uri', '')})")
-    
-    
-    # --- GRÁFICO PERSONALIZADO COM ALTAIR (Proposições) ---
-    st.markdown("### Comparação Visual de Projetos Apresentados")
-
-    # Cria um DataFrame simples para o gráfico
-    df_grafico_prop = pd.DataFrame({
-        'Deputado': [deputado_selecionado1['nome'], deputado_selecionado2['nome']],
-        'Proposicoes': [num_proposicoes1, num_proposicoes2]
-    })
-    
-    # Cria o gráfico Altair
-    chart_prop = alt.Chart(df_grafico_prop).mark_bar(
-        size=40,
-    ).encode(
-        x=alt.X('Deputado', axis=None), 
-        y=alt.Y('Proposicoes', title='Nº de Proposições'),
-        color=alt.Color('Deputado', scale=cores_deputados, legend=None),
-        tooltip=['Deputado', 'Proposicoes']
-    ).properties(
-        title=f"Projetos de Lei e Outras Proposições Apresentadas ({ano})"
-    ).interactive()
-
-    st.altair_chart(chart_prop, use_container_width=True)
-
-    st.markdown("---")
-
-    # --- 5. Detalhamento em Tabela (Despesas) ---
+    # --- 5. Detalhamento em Tabela ---
     st.markdown("### Detalhamento das Despesas (Registros)")
     
     col_tab1, col_tab2 = st.columns(2)
