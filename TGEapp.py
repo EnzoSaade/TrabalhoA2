@@ -61,36 +61,26 @@ def obter_despesas_deputado(id_deputado, ano, mes=None, limite=1000):
     except requests.exceptions.RequestException:
         return None
 
-# --- NOVA FUNÇÃO PARA BUSCAR PROPOSIÇÕES (PROJETOS) ---
 @st.cache_data(ttl=3600)
 def obter_proposicoes_deputado(id_deputado, ano):
     """Busca o número de proposições (Projetos de Lei, etc.) do deputado em um ano específico."""
     url = "https://dadosabertos.camara.leg.br/api/v2/proposicoes"
-    # Note que a API de proposições é diferente e aceita o campo idAutor para filtrar por deputado
     params = {
         "idAutor": id_deputado,
         "ano": ano,
         "ordem": "ASC",
         "ordenarPor": "dataApresentacao",
-        "itens": 100 # Limite inicial, pode ser ajustado se necessário, mas 100 por ano é um bom começo
+        "itens": 100 
     }
     
-    proposicoes = []
-    
     try:
-        # A API de proposições geralmente usa paginação.
-        # Para um contador simples, uma busca inicial pode ser suficiente.
         response = requests.get(url, params=params)
         response.raise_for_status()
-        dados = response.json().get("dados", [])
-        proposicoes.extend(dados)
-        
-        # Em produção, você faria um loop nos links de navegação ("next") para pegar todos.
-        # Para simplificar, vamos retornar o que foi encontrado na primeira página.
-        return proposicoes
+        return response.json().get("dados", [])
         
     except requests.exceptions.RequestException as e:
-        st.error(f"Erro na conexão ao buscar proposições: {e}")
+        # Exibe o erro de forma clara, mas permite que o app continue
+        st.warning(f"⚠️ Aviso: Não foi possível carregar as Proposições para o ano {ano} (Erro: {e}). Tente um ano anterior.")
         return None
 
 def calcular_total_despesas(despesas):
@@ -160,11 +150,14 @@ def comparar_deputados_ui():
     st.subheader("🗓️ Período para Comparação")
     
     ano_padrao = datetime.now().year
+    # Cria a lista de anos disponíveis (ex: [2025, 2024, 2023, ...])
     anos_disponiveis = list(range(ano_padrao, ano_padrao - 5, -1))
     
     col_c_ano, col_c_mes = st.columns(2)
     
-    ano = col_c_ano.selectbox("Ano", options=anos_disponiveis, key="comp_ano")
+    # CORREÇÃO AQUI: Define o índice padrão para 1 (o ano anterior) para evitar o erro 400
+    ano_default_index = 1 if len(anos_disponiveis) > 1 else 0
+    ano = col_c_ano.selectbox("Ano", options=anos_disponiveis, key="comp_ano", index=ano_default_index)
     
     meses_comp = {
         None: "Todo o Ano", 1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril",
